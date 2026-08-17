@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spin & Earn</title>
+
+<!-- ===================================================================
+  FIREBASE SETUP — READ THIS FIRST
+  1. Go to https://console.firebase.google.com → Create a project (free).
+  2. In the project, go to Build → Authentication → Get started →
+     enable "Email/Password" sign-in method.
+  3. Go to Build → Firestore Database → Create database → Start in
+     "test mode" for now (we tighten rules below).
+  4. Go to Project settings (gear icon) → General → scroll to "Your apps"
+     → click the </> (web) icon → register the app → copy the
+     firebaseConfig object it gives you → paste it below, replacing
+     the placeholder values.
+  5. In Firestore → Rules tab, paste the rules given in the setup guide
+     you were given alongside this file, then click Publish.
+=================================================================== -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap');
+
+  :root{
+    --bg:#F6FAF7; --card:#FFFFFF; --line:#E2E8E4; --ink:#0F1B14; --ink-soft:#5B6B60;
+    --green:#178B4C; --green-deep:#0E6B3A; --green-tint:#E5F5EC;
+    --gold:#C7941B; --gold-tint:#FBF2DE; --danger:#C0392B; --radius:16px;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{
+    font-family:'Inter',sans-serif; color:var(--ink); min-height:100vh; -webkit-font-smoothing:antialiased;
+    background:
+      radial-gradient(circle at 15% -10%, rgba(23,139,76,0.16), transparent 42%),
+      radial-gradient(circle at 100% 18%, rgba(199,148,27,0.10), transparent 38%),
+      linear-gradient(180deg, #F4F9F5 0%, #EEF6F0 55%, #F4F9F5 100%);
+    background-attachment:fixed;
+  }
+  body::before{
+    content:''; position:fixed; inset:0; pointer-events:none; z-index:0;
+    background-image:linear-gradient(rgba(15,27,20,0.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(15,27,20,0.035) 1px, transparent 1px);
+    background-size:26px 26px;
+    mask-image:radial-gradient(ellipse 70% 55% at 50% 0%, #000 0%, transparent 75%);
+  }
+  h1,h2,h3,.display{ font-family:'Space Grotesk',sans-serif; letter-spacing:-0.01em; }
+  .mono{ font-family:'JetBrains Mono',monospace; }
+  #app{ max-width:480px; margin:0 auto; min-height:100vh; display:flex; flex-direction:column; position:relative; z-index:1; }
+
+  .auth-wrap{ flex:1; display:flex; flex-direction:column; justify-content:center; padding:32px 24px; }
+  .auth-badge{ width:56px; height:56px; border-radius:14px; background:var(--green); display:flex; align-items:center; justify-content:center; margin-bottom:20px; box-shadow:0 8px 20px -6px rgba(23,139,76,0.45); }
+  .auth-badge svg{ width:28px; height:28px; }
+  .auth-title{ font-size:26px; font-weight:700; margin-bottom:6px; }
+  .auth-sub{ color:var(--ink-soft); font-size:14px; margin-bottom:28px; line-height:1.5; }
+  .field{ margin-bottom:14px; }
+  .field label{ display:block; font-size:12px; font-weight:600; color:var(--ink-soft); margin-bottom:6px; text-transform:uppercase; letter-spacing:0.04em; }
+  .field input{ width:100%; padding:13px 14px; border-radius:10px; border:1.5px solid var(--line); font-size:15px; background:#fff; color:var(--ink); }
+  .field input:focus{ outline:none; border-color:var(--green); }
+  .btn{ width:100%; padding:14px; border-radius:10px; border:none; font-size:15px; font-weight:600; cursor:pointer; transition:transform .12s ease; }
+  .btn:active{ transform:scale(0.98); }
+  .btn-primary{ background:var(--green); color:#fff; box-shadow:0 6px 16px -6px rgba(23,139,76,0.5); }
+  .btn-primary:disabled{ opacity:0.5; cursor:not-allowed; }
+  .auth-switch{ text-align:center; margin-top:18px; font-size:14px; color:var(--ink-soft); }
+  .auth-switch a{ color:var(--green-deep); font-weight:600; text-decoration:none; cursor:pointer; }
+  .err-msg{ background:#FDEEEC; color:var(--danger); font-size:13px; padding:10px 12px; border-radius:8px; margin-bottom:14px; }
+  .ok-msg{ background:var(--green-tint); color:var(--green-deep); font-size:13px; padding:10px 12px; border-radius:8px; margin-bottom:14px; }
+
+  .topbar{ display:flex; align-items:center; justify-content:space-between; padding:18px 20px 14px; position:sticky; top:0; background:var(--bg); z-index:5; }
+  .brand{ display:flex; align-items:center; gap:10px; }
+  .brand-mark{ width:34px; height:34px; border-radius:9px; background:var(--green); display:flex; align-items:center; justify-content:center; }
+  .brand-mark svg{ width:18px; height:18px; }
+  .brand-name{ font-size:16px; font-weight:700; }
+  .icon-btn{ width:36px; height:36px; border-radius:10px; border:1.5px solid var(--line); background:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer; }
+  .hamburger-btn{ width:36px; height:36px; border-radius:10px; border:1.5px solid var(--line); background:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer; }
+
+  .balance-card{ margin:0 20px 18px; padding:22px; border-radius:20px; background:linear-gradient(135deg, var(--green-deep), var(--green)); color:#fff; position:relative; overflow:hidden; }
+  .balance-card::after{ content:''; position:absolute; right:-30px; top:-30px; width:140px; height:140px; border-radius:50%; background:rgba(255,255,255,0.08); }
+  .balance-label{ font-size:12px; opacity:0.85; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:6px; }
+  .balance-value{ font-size:34px; font-weight:700; }
+  .balance-sub{ font-size:12px; opacity:0.8; margin-top:6px; }
+
+  main{ flex:1; padding-bottom:40px; }
+  .section{ padding:0 20px; margin-bottom:22px; }
+  .section-title{ font-size:14px; font-weight:700; color:var(--ink-soft); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:12px; }
+  .action-card{ background:var(--card); border:1.5px solid var(--line); border-radius:18px; padding:18px; }
+  .checkin-row{ display:flex; align-items:center; justify-content:space-between; gap:14px; }
+  .checkin-info h3{ font-size:15px; margin-bottom:3px; }
+  .checkin-info p{ font-size:13px; color:var(--ink-soft); }
+  .checkin-btn{ padding:11px 18px; border-radius:10px; border:none; font-weight:700; font-size:13.5px; background:var(--gold-tint); color:var(--gold); cursor:pointer; white-space:nowrap; }
+  .checkin-btn.claimed{ background:var(--green-tint); color:var(--green-deep); }
+  .checkin-btn:disabled{ opacity:0.55; cursor:not-allowed; }
+
+  .spin-card{ text-align:center; }
+  .wheel-wrap{ position:relative; width:220px; height:220px; margin:14px auto 18px; }
+  .wheel{ width:220px; height:220px; border-radius:50%; border:6px solid #fff; box-shadow:0 0 0 2px var(--line), 0 14px 30px -10px rgba(15,27,20,0.25); position:relative; transition:transform 4.2s cubic-bezier(0.15,0.85,0.25,1); }
+  .wheel-pointer{ position:absolute; top:-4px; left:50%; transform:translateX(-50%); width:0; height:0; border-left:11px solid transparent; border-right:11px solid transparent; border-top:18px solid var(--ink); z-index:3; }
+  .wheel-hub{ position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:46px; height:46px; border-radius:50%; background:#fff; border:3px solid var(--green); display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; color:var(--green-deep); z-index:2; }
+  .spin-meta{ display:flex; justify-content:center; gap:18px; margin-bottom:14px; font-size:12.5px; color:var(--ink-soft); }
+  .spin-meta b{ color:var(--ink); font-family:'JetBrains Mono',monospace; }
+  .spin-result{ min-height:22px; font-size:14px; font-weight:600; color:var(--green-deep); margin-bottom:12px; }
+
+  .wd-form .field{ margin-bottom:12px; }
+  .wd-hint{ font-size:12px; color:var(--ink-soft); margin-top:10px; line-height:1.5; }
+  .history-item{ display:flex; justify-content:space-between; align-items:center; padding:12px 0; border-bottom:1px solid var(--line); font-size:13.5px; }
+  .history-item:last-child{ border-bottom:none; }
+  .status-pill{ font-size:11px; font-weight:700; padding:4px 9px; border-radius:20px; text-transform:uppercase; }
+  .status-pending{ background:var(--gold-tint); color:var(--gold); }
+  .status-paid{ background:var(--green-tint); color:var(--green-deep); }
+  .empty-note{ font-size:13px; color:var(--ink-soft); text-align:center; padding:18px 0; }
+
+  .drawer-overlay{ position:fixed; inset:0; background:rgba(15,27,20,0.4); z-index:20; opacity:0; pointer-events:none; transition:opacity .2s ease; }
+  .drawer-overlay.open{ opacity:1; pointer-events:auto; }
+  .drawer{ position:fixed; top:0; left:0; height:100%; width:78%; max-width:300px; background:#fff; z-index:21; transform:translateX(-100%); transition:transform .28s cubic-bezier(0.2,0.9,0.3,1); padding:22px 18px; display:flex; flex-direction:column; }
+  .drawer.open{ transform:translateX(0); }
+  .drawer-header{ display:flex; align-items:center; gap:10px; margin-bottom:26px; padding:0 6px; }
+  .drawer-item{ display:flex; align-items:center; gap:12px; padding:13px 12px; border-radius:12px; font-size:14.5px; font-weight:600; color:var(--ink); cursor:pointer; margin-bottom:4px; }
+  .drawer-item.active{ background:var(--green-tint); color:var(--green-deep); }
+  .drawer-item svg{ width:19px; height:19px; flex-shrink:0; }
+
+  .admin-wrap{ padding:20px; }
+  .admin-header{ display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; }
+  .req-card{ background:#fff; border:1.5px solid var(--line); border-radius:14px; padding:14px 16px; margin-bottom:12px; }
+  .req-top{ display:flex; justify-content:space-between; margin-bottom:8px; }
+  .req-email{ font-weight:600; font-size:14px; }
+  .req-amount{ font-family:'JetBrains Mono',monospace; font-weight:700; color:var(--green-deep); }
+  .req-addr{ font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--ink-soft); word-break:break-all; margin-bottom:10px; }
+  .req-actions{ display:flex; gap:8px; }
+  .req-actions button{ flex:1; padding:9px; border-radius:8px; border:none; font-size:12.5px; font-weight:700; cursor:pointer; }
+  .btn-mark-paid{ background:var(--green); color:#fff; }
+  .toast{ position:fixed; bottom:26px; left:50%; transform:translateX(-50%); background:var(--ink); color:#fff; padding:11px 18px; border-radius:10px; font-size:13px; z-index:50; opacity:0; transition:opacity .25s ease; pointer-events:none; max-width:90%; text-align:center; }
+  .toast.show{ opacity:1; }
+  .loading-dot{ display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--ink-soft); margin-right:6px; animation:pulse 1.2s infinite ease-in-out; }
+  @keyframes pulse{ 0%,100%{opacity:0.3;} 50%{opacity:1;} }
+  .view{ display:none; } .view.active{ display:block; }
+  .config-warning{ background:#FDEEEC; color:var(--danger); padding:16px; border-radius:12px; font-size:13.5px; line-height:1.6; margin:20px; }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div id="view-config-error" class="view">
+    <div class="config-warning">
+      <b>Firebase not configured yet.</b><br><br>
+      Open this file, find the <span class="mono">firebaseConfig</span> object near the top of the
+      script section, and replace the placeholder values with the ones from your own Firebase project.
+      See the setup guide for step-by-step instructions.
+    </div>
+  </div>
+
+  <div id="view-auth" class="view">
+    <div class="auth-wrap">
+      <div class="auth-badge"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3v9l6 3"/></svg></div>
+      <div id="auth-title" class="auth-title">Welcome back</div>
+      <div id="auth-sub" class="auth-sub">Sign in to check in, spin, and track your withdrawals.</div>
+      <div id="auth-msg"></div>
+      <div class="field"><label>Email</label><input type="email" id="auth-email" placeholder="you@email.com" autocomplete="email"></div>
+      <div class="field"><label>Password</label><input type="password" id="auth-password" placeholder="••••••••" autocomplete="current-password"></div>
+      <div class="field" id="auth-confirm-wrap" style="display:none;"><label>Confirm password</label><input type="password" id="auth-password2" placeholder="••••••••"></div>
+      <button class="btn btn-primary" id="auth-submit">Sign in</button>
+      <div class="auth-switch"><span id="auth-switch-text">New here?</span> <a id="auth-switch-link">Create an account</a></div>
+    </div>
+  </div>
+
+  <div id="view-main" class="view">
+    <div class="topbar">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <button class="hamburger-btn" id="hamburger-btn"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#0F1B14" stroke-width="2.2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+        <div class="brand"><div class="brand-mark"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3v9l6 3"/></svg></div><div class="brand-name">Spin & Earn</div></div>
+      </div>
+      <button class="icon-btn" id="logout-btn"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#0F1B14" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>
+    </div>
+
+    <div class="drawer-overlay" id="drawer-overlay"></div>
+    <div class="drawer" id="drawer">
+      <div class="drawer-header"><div class="brand-mark"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3v9l6 3"/></svg></div><div class="brand-name">Spin & Earn</div></div>
+      <div class="drawer-item active" data-tab="home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>Home</div>
+      <div class="drawer-item" data-tab="withdraw"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>Withdrawal</div>
+      <div class="drawer-item" data-tab="referral"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Referrals</div>
+    </div>
+
+    <div class="balance-card">
+      <div class="balance-label">Available balance</div>
+      <div class="balance-value mono" id="balance-display">$0.000</div>
+      <div class="balance-sub" id="user-email-display"></div>
+    </div>
+
+    <main>
+      <div id="tab-home" class="tab-view">
+        <div class="section">
+          <div class="section-title">Daily check-in</div>
+          <div class="action-card checkin-row">
+            <div class="checkin-info"><h3>Come back every day</h3><p>Claim <span class="mono">$0.01</span> once every 24 hours</p></div>
+            <button class="checkin-btn" id="checkin-btn">Claim</button>
+          </div>
+        </div>
+        <div class="section">
+          <div class="section-title">Spin & win</div>
+          <div class="action-card spin-card">
+            <div class="wheel-wrap"><div class="wheel-pointer"></div><div class="wheel" id="wheel"></div><div class="wheel-hub">SPIN</div></div>
+            <div class="spin-result" id="spin-result">&nbsp;</div>
+            <div class="spin-meta"><span>Spins left today: <b id="spins-left">20</b>/20</span></div>
+            <button class="btn btn-primary" id="spin-btn">Spin the wheel</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="tab-withdraw" class="tab-view" style="display:none;">
+        <div class="section">
+          <div class="section-title">Request withdrawal</div>
+          <div class="action-card wd-form">
+            <div id="wd-msg"></div>
+            <div class="field"><label>Amount (USDT)</label><input type="number" id="wd-amount" placeholder="1.00" step="0.01" min="1"></div>
+            <div class="field"><label>BNB Smart Chain address</label><input type="text" id="wd-address" placeholder="0x..."></div>
+            <button class="btn btn-primary" id="wd-submit">Submit request</button>
+            <div class="wd-hint">Minimum withdrawal is $1.00. Requests are reviewed and paid out manually — this usually takes a bit of time.</div>
+          </div>
+        </div>
+        <div class="section">
+          <div class="section-title">History</div>
+          <div class="action-card" id="wd-history"><div class="empty-note">No withdrawal requests yet.</div></div>
+        </div>
+      </div>
+
+      <div id="tab-referral" class="tab-view" style="display:none;">
+        <div class="section">
+          <div class="section-title">Your referral link</div>
+          <div class="action-card">
+            <p style="font-size:13.5px; color:var(--ink-soft); line-height:1.6; margin-bottom:14px;">
+              Share your link. When someone you refer completes <b>20 spins in a day</b> and checks in <b>3 days in a row</b>, you get <b class="mono">$0.10</b> added to your balance automatically.
+            </p>
+            <div style="display:flex; gap:8px;">
+              <input type="text" id="ref-link-display" readonly style="flex:1; padding:11px 12px; border-radius:10px; border:1.5px solid var(--line); font-size:12.5px; font-family:'JetBrains Mono',monospace; background:var(--green-tint); color:var(--green-deep);">
+              <button class="checkin-btn" id="ref-copy-btn">Copy</button>
+            </div>
+          </div>
+        </div>
+        <div class="section">
+          <div class="section-title">Your referrals</div>
+          <div class="action-card" id="ref-list"><div class="empty-note">Loading…</div></div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <div id="view-admin" class="view">
+    <div class="admin-wrap">
+      <div class="admin-header"><h2>Withdrawal requests</h2><button class="icon-btn" id="admin-exit"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#0F1B14" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+      <div id="admin-list"></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+</div>
+
+<script>
+/* ===================================================================
+   PASTE YOUR FIREBASE CONFIG HERE (from Firebase console → Project
+   settings → Your apps → SDK setup and configuration)
+=================================================================== */
+const firebaseConfig = {
+  apiKey: "AIzaSyCM3UHV4EZh7seNpgra5xGUT1SMpAS23uM",
+  authDomain: "spinandearn-14b45.firebaseapp.com",
+  projectId: "spinandearn-14b45",
+  storageBucket: "spinandearn-14b45.firebasestorage.app",
+  messagingSenderId: "478541018797",
+  appId: "1:478541018797:web:ce5eeda816bbecfd72b824"
+};
+
+const ADMIN_PASSCODE = "letmein-admin"; // change this before sharing the link
+
+/* ---------------- Init ---------------- */
+let db, auth;
+let firebaseReady = firebaseConfig.apiKey !== "YOUR_API_KEY";
+
+if(firebaseReady){
+  firebase.initializeApp(firebaseConfig);
+  auth = firebase.auth();
+  db = firebase.firestore();
+} else {
+  document.getElementById('view-config-error').classList.add('active');
+}
+
+let currentUser = null;   // firebase auth user
+let currentData = null;   // firestore user doc data
+let isSignupMode = false;
+let wheelValues = [0.01, 0.02, 0.03, 0.04, 0.05];
+let spinning = false;
+
+function showToast(msg, ms){
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(showToast._h);
+  showToast._h = setTimeout(()=> t.classList.remove('show'), ms || 2200);
+}
+function showView(id){
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+function todayStr(){
+  const d = new Date();
+  return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();
+}
+function yesterdayStr(){
+  const d = new Date(); d.setDate(d.getDate()-1);
+  return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();
+}
+function getReferralCodeFromUrl(){
+  return new URLSearchParams(window.location.search).get('ref');
+}
+function genRefCode(){
+  return Math.random().toString(36).slice(2,10);
+}
+
+/* ---------------- Auth UI ---------------- */
+function setAuthMode(signup){
+  isSignupMode = signup;
+  document.getElementById('auth-title').textContent = signup ? 'Create your account' : 'Welcome back';
+  document.getElementById('auth-sub').textContent = signup ? 'Join with your email to start earning.' : 'Sign in to check in, spin, and track your withdrawals.';
+  document.getElementById('auth-confirm-wrap').style.display = signup ? 'block' : 'none';
+  document.getElementById('auth-submit').textContent = signup ? 'Create account' : 'Sign in';
+  document.getElementById('auth-switch-text').textContent = signup ? 'Already have an account?' : 'New here?';
+  document.getElementById('auth-switch-link').textContent = signup ? 'Sign in' : 'Create an account';
+  document.getElementById('auth-msg').innerHTML = '';
+}
+if(firebaseReady){
+  document.getElementById('auth-switch-link').addEventListener('click', ()=> setAuthMode(!isSignupMode));
+  setAuthMode(false);
+  showView('view-auth');
+}
+
+document.getElementById('auth-submit').addEventListener('click', async ()=>{
+  const email = document.getElementById('auth-email').value.trim().toLowerCase();
+  const pw = document.getElementById('auth-password').value;
+  const msgEl = document.getElementById('auth-msg');
+  msgEl.innerHTML = '';
+  if(!email || !pw){ msgEl.innerHTML = '<div class="err-msg">Please fill in both fields.</div>'; return; }
+
+  const btn = document.getElementById('auth-submit');
+  btn.disabled = true; btn.textContent = 'Please wait…';
+
+  try{
+    if(isSignupMode){
+      const pw2 = document.getElementById('auth-password2').value;
+      if(pw.length < 6){ throw new Error('Password must be at least 6 characters.'); }
+      if(pw !== pw2){ throw new Error('Passwords do not match.'); }
+
+      const cred = await auth.createUserWithEmailAndPassword(email, pw);
+      const uid = cred.user.uid;
+      const refCode = genRefCode();
+      const referredByCode = getReferralCodeFromUrl();
+      let referredByUid = null;
+
+      if(referredByCode){
+        const q = await db.collection('users').where('refCode','==',referredByCode).limit(1).get();
+        if(!q.empty) referredByUid = q.docs[0].id;
+      }
+
+      const userDoc = {
+        email, balance: 0, lastCheckin: null, spinsToday: 0, spinsDate: null,
+        totalSpins: 0, checkinStreak: 0, lastCheckinDay: null, hasHit20SpinsDay: false,
+        refCode, referredByUid: referredByUid, createdAt: Date.now()
+      };
+      await db.collection('users').doc(uid).set(userDoc);
+
+      if(referredByUid){
+        await db.collection('referrals').doc(referredByUid + '_' + uid).set({
+          referrerUid: referredByUid, referredUid: uid, referredEmail: email,
+          rewarded: false, createdAt: Date.now()
+        });
+      }
+      currentUser = cred.user; currentData = userDoc;
+      enterApp();
+    } else {
+      const cred = await auth.signInWithEmailAndPassword(email, pw);
+      currentUser = cred.user;
+      const docSnap = await db.collection('users').doc(currentUser.uid).get();
+      if(!docSnap.exists){ throw new Error('Account data not found.'); }
+      currentData = docSnap.data();
+      enterApp();
+    }
+  } catch(e){
+    let msg = e.message || 'Something went wrong.';
+    if(e.code === 'auth/email-already-in-use') msg = 'An account already exists with this email.';
+    if(e.code === 'auth/user-not-found') msg = 'No account found with this email.';
+    if(e.code === 'auth/wrong-password') msg = 'Incorrect password.';
+    if(e.code === 'auth/invalid-credential') msg = 'Incorrect email or password.';
+    msgEl.innerHTML = `<div class="err-msg">${msg}</div>`;
+  }
+  btn.disabled = false;
+  btn.textContent = isSignupMode ? 'Create account' : 'Sign in';
+});
+
+document.getElementById('logout-btn').addEventListener('click', async ()=>{
+  await auth.signOut();
+  currentUser = null; currentData = null;
+  showView('view-auth');
+  document.getElementById('auth-email').value = '';
+  document.getElementById('auth-password').value = '';
+});
+
+/* ---------------- Enter app ---------------- */
+async function enterApp(){
+  showView('view-main');
+  document.getElementById('user-email-display').textContent = currentData.email;
+  await refreshUserUI();
+}
+
+async function refreshUserUI(){
+  const docSnap = await db.collection('users').doc(currentUser.uid).get();
+  currentData = docSnap.data();
+
+  document.getElementById('balance-display').textContent = '$' + currentData.balance.toFixed(3);
+
+  const now = Date.now();
+  const canCheckin = !currentData.lastCheckin || (now - currentData.lastCheckin) >= 24*60*60*1000;
+  const cbtn = document.getElementById('checkin-btn');
+  cbtn.textContent = canCheckin ? 'Claim' : 'Claimed';
+  cbtn.disabled = !canCheckin;
+  cbtn.classList.toggle('claimed', !canCheckin);
+
+  const t = todayStr();
+  const spinsUsed = (currentData.spinsDate === t) ? currentData.spinsToday : 0;
+  const spinsLeft = Math.max(0, 20 - spinsUsed);
+  document.getElementById('spins-left').textContent = spinsLeft;
+  document.getElementById('spin-btn').disabled = spinsLeft <= 0 || spinning;
+  document.getElementById('spin-btn').textContent = spinsLeft <= 0 ? 'No spins left today' : 'Spin the wheel';
+}
+
+/* ---------------- Check-in ---------------- */
+document.getElementById('checkin-btn').addEventListener('click', async ()=>{
+  const btn = document.getElementById('checkin-btn');
+  btn.disabled = true; btn.textContent = 'Claiming…';
+  try{
+    const ref = db.collection('users').doc(currentUser.uid);
+    const snap = await ref.get();
+    const d = snap.data();
+    const now = Date.now();
+    if(d.lastCheckin && (now - d.lastCheckin) < 24*60*60*1000){
+      showToast("You've already checked in today.");
+      await refreshUserUI(); return;
+    }
+    const t = todayStr();
+    const streak = (d.lastCheckinDay === yesterdayStr()) ? (d.checkinStreak || 0) + 1 : 1;
+    await ref.update({
+      balance: firebase.firestore.FieldValue.increment(0.01),
+      lastCheckin: now, lastCheckinDay: t, checkinStreak: streak
+    });
+    showToast('+$0.01 added — see you tomorrow!');
+    await refreshUserUI();
+    const updated = (await ref.get()).data();
+    await maybeRewardReferrer(currentUser.uid, updated);
+  } catch(e){
+    showToast('Could not check in. Try again.');
+  }
+  await refreshUserUI();
+});
+
+/* ---------------- Spin wheel ---------------- */
+function buildWheel(){
+  const wheel = document.getElementById('wheel');
+  const colors = ['#178B4C','#0E6B3A','#1FA35C','#0C5A31','#20B368'];
+  const n = wheelValues.length; const seg = 360/n;
+  let parts = [];
+  for(let i=0;i<n;i++) parts.push(`${colors[i%colors.length]} ${i*seg}deg ${(i+1)*seg}deg`);
+  wheel.style.background = `conic-gradient(${parts.join(',')})`;
+  wheel.innerHTML = '';
+  for(let i=0;i<n;i++){
+    const mid = (i*seg + (i+1)*seg)/2;
+    const label = document.createElement('div');
+    label.textContent = '$' + wheelValues[i].toFixed(2);
+    label.style.cssText = `position:absolute; top:50%; left:50%; transform-origin:0 0; transform:rotate(${mid}deg) translate(0,-78px) rotate(${-mid}deg) translate(-50%,-50%); color:#fff; font-family:'JetBrains Mono',monospace; font-weight:700; font-size:12px; text-shadow:0 1px 3px rgba(0,0,0,0.35);`;
+    wheel.appendChild(label);
+  }
+}
+
+document.getElementById('spin-btn').addEventListener('click', async ()=>{
+  if(spinning) return;
+  try{
+    const ref = db.collection('users').doc(currentUser.uid);
+    const snap = await ref.get();
+    const d = snap.data();
+    const t = todayStr();
+    const spinsUsed = (d.spinsDate === t) ? d.spinsToday : 0;
+    if(spinsUsed >= 20){ showToast('No spins left today.'); await refreshUserUI(); return; }
+
+    spinning = true;
+    document.getElementById('spin-btn').disabled = true;
+    document.getElementById('spin-result').textContent = '';
+
+    const n = wheelValues.length, seg = 360/n;
+    const winIndex = Math.floor(Math.random()*n);
+    const wheel = document.getElementById('wheel');
+    const currentRotation = parseFloat(wheel.dataset.rotation) || 0;
+    const targetSegCenter = winIndex*seg + seg/2;
+    const finalRotation = currentRotation - (currentRotation % 360) + 5*360 + (360 - targetSegCenter);
+    wheel.dataset.rotation = finalRotation;
+    wheel.style.transform = `rotate(${finalRotation}deg)`;
+
+    setTimeout(async ()=>{
+      try{
+        const winAmount = wheelValues[winIndex];
+        const snap2 = await ref.get();
+        const d2 = snap2.data();
+        const t2 = todayStr();
+        const used2 = (d2.spinsDate === t2) ? d2.spinsToday : 0;
+        const newSpinsToday = used2 + 1;
+        await ref.update({
+          balance: firebase.firestore.FieldValue.increment(winAmount),
+          spinsDate: t2, spinsToday: newSpinsToday,
+          totalSpins: firebase.firestore.FieldValue.increment(1),
+          hasHit20SpinsDay: d2.hasHit20SpinsDay || newSpinsToday >= 20
+        });
+        document.getElementById('spin-result').textContent = `You won $${winAmount.toFixed(2)}!`;
+        spinning = false;
+        await refreshUserUI();
+        const updated = (await ref.get()).data();
+        await maybeRewardReferrer(currentUser.uid, updated);
+      } catch(e){
+        spinning = false;
+        showToast('Could not save your spin. Try again.');
+        await refreshUserUI();
+      }
+    }, 4300);
+  } catch(e){
+    spinning = false;
+    showToast('Could not start spin. Try again.');
+  }
+});
+
+/* ---------------- Referrals ---------------- */
+async function maybeRewardReferrer(referredUid, data){
+  if(!data.referredByUid) return;
+  if(!data.hasHit20SpinsDay || (data.checkinStreak || 0) < 3) return;
+
+  const refDocId = data.referredByUid + '_' + referredUid;
+  const refDocRef = db.collection('referrals').doc(refDocId);
+  const refSnap = await refDocRef.get();
+  if(!refSnap.exists || refSnap.data().rewarded) return;
+
+  await db.collection('users').doc(data.referredByUid).update({
+    balance: firebase.firestore.FieldValue.increment(0.10)
+  });
+  await refDocRef.update({ rewarded: true, rewardedAt: Date.now() });
+
+  if(currentUser && currentUser.uid === data.referredByUid) await refreshUserUI();
+}
+
+async function renderReferralTab(){
+  const linkInput = document.getElementById('ref-link-display');
+  const baseUrl = window.location.origin + window.location.pathname;
+  linkInput.value = baseUrl + '?ref=' + currentData.refCode;
+
+  const listEl = document.getElementById('ref-list');
+  listEl.innerHTML = '<div class="empty-note"><span class="loading-dot"></span>Loading…</div>';
+  const q = await db.collection('referrals').where('referrerUid','==',currentUser.uid).get();
+  if(q.empty){ listEl.innerHTML = '<div class="empty-note">No referrals yet. Share your link to get started.</div>'; return; }
+
+  const rows = [];
+  for(const doc of q.docs){
+    const r = doc.data();
+    const uSnap = await db.collection('users').doc(r.referredUid).get();
+    const u = uSnap.exists ? uSnap.data() : null;
+    const spinsToday = u && u.spinsDate === todayStr() ? u.spinsToday : 0;
+    const streak = u ? (u.checkinStreak || 0) : 0;
+    rows.push({ email: r.referredEmail, rewarded: r.rewarded, spinsToday, streak });
+  }
+  listEl.innerHTML = rows.map(r=>{
+    const pill = r.rewarded ? '<span class="status-pill status-paid">Earned $0.10</span>' : '<span class="status-pill status-pending">In progress</span>';
+    return `<div class="history-item"><div><div style="font-weight:600; font-size:13.5px;">${r.email}</div><div style="font-size:11.5px; color:var(--ink-soft);">Spins today: ${r.spinsToday}/20 · Streak: ${r.streak}/3</div></div>${pill}</div>`;
+  }).join('');
+}
+
+document.getElementById('ref-copy-btn').addEventListener('click', ()=>{
+  const input = document.getElementById('ref-link-display');
+  input.select();
+  navigator.clipboard.writeText(input.value).then(()=> showToast('Referral link copied!'));
+});
+
+/* ---------------- Drawer + tabs ---------------- */
+const drawer = document.getElementById('drawer');
+const drawerOverlay = document.getElementById('drawer-overlay');
+function openDrawer(){ drawer.classList.add('open'); drawerOverlay.classList.add('open'); }
+function closeDrawer(){ drawer.classList.remove('open'); drawerOverlay.classList.remove('open'); }
+document.getElementById('hamburger-btn').addEventListener('click', openDrawer);
+drawerOverlay.addEventListener('click', closeDrawer);
+
+function switchTab(tab){
+  document.querySelectorAll('.drawer-item').forEach(b=>b.classList.remove('active'));
+  document.querySelector(`.drawer-item[data-tab="${tab}"]`).classList.add('active');
+  document.getElementById('tab-home').style.display = tab === 'home' ? 'block' : 'none';
+  document.getElementById('tab-withdraw').style.display = tab === 'withdraw' ? 'block' : 'none';
+  document.getElementById('tab-referral').style.display = tab === 'referral' ? 'block' : 'none';
+  if(tab === 'withdraw') renderWithdrawHistory();
+  if(tab === 'referral') renderReferralTab();
+  closeDrawer();
+}
+document.querySelectorAll('.drawer-item').forEach(item=> item.addEventListener('click', ()=> switchTab(item.dataset.tab)));
+
+/* ---------------- Withdrawals ---------------- */
+document.getElementById('wd-submit').addEventListener('click', async ()=>{
+  const msgEl = document.getElementById('wd-msg');
+  msgEl.innerHTML = '';
+  const amount = parseFloat(document.getElementById('wd-amount').value);
+  const address = document.getElementById('wd-address').value.trim();
+  if(!amount || amount < 1){ msgEl.innerHTML = '<div class="err-msg">Minimum withdrawal amount is $1.00.</div>'; return; }
+  if(!address || address.length < 10){ msgEl.innerHTML = '<div class="err-msg">Enter a valid BNB Smart Chain address.</div>'; return; }
+
+  const btn = document.getElementById('wd-submit');
+  btn.disabled = true; btn.textContent = 'Submitting…';
+  try{
+    const ref = db.collection('users').doc(currentUser.uid);
+    const snap = await ref.get();
+    const d = snap.data();
+    if(amount > d.balance){ throw new Error('Amount exceeds your available balance.'); }
+
+    await ref.update({ balance: firebase.firestore.FieldValue.increment(-amount) });
+    await db.collection('withdrawals').add({
+      uid: currentUser.uid, email: currentData.email, amount, address,
+      status: 'pending', createdAt: Date.now(), paidAt: null
+    });
+
+    document.getElementById('wd-amount').value = '';
+    document.getElementById('wd-address').value = '';
+    msgEl.innerHTML = '<div class="ok-msg">Request submitted. It will show as "Paid" here once sent.</div>';
+    await refreshUserUI();
+    await renderWithdrawHistory();
+  } catch(e){
+    msgEl.innerHTML = `<div class="err-msg">${e.message}</div>`;
+  }
+  btn.disabled = false; btn.textContent = 'Submit request';
+});
+
+async function renderWithdrawHistory(){
+  const container = document.getElementById('wd-history');
+  container.innerHTML = '<div class="empty-note"><span class="loading-dot"></span>Loading…</div>';
+  const q = await db.collection('withdrawals').where('uid','==',currentUser.uid).get();
+  const mine = q.docs.map(d=>d.data()).sort((a,b)=> b.createdAt - a.createdAt);
+  if(mine.length === 0){ container.innerHTML = '<div class="empty-note">No withdrawal requests yet.</div>'; return; }
+  container.innerHTML = mine.map(r=>{
+    const date = new Date(r.createdAt).toLocaleDateString();
+    const pill = r.status === 'paid' ? '<span class="status-pill status-paid">Paid</span>' : '<span class="status-pill status-pending">Pending</span>';
+    return `<div class="history-item"><div><div class="mono" style="font-weight:700;">$${r.amount.toFixed(2)}</div><div style="font-size:11.5px; color:var(--ink-soft);">${date}</div></div>${pill}</div>`;
+  }).join('');
+}
+
+/* ---------------- Admin panel ---------------- */
+async function tryEnterAdmin(){
+  const code = prompt('Admin passcode:');
+  if(code === null) return;
+  if(code !== ADMIN_PASSCODE){ showToast('Incorrect passcode.'); return; }
+  showView('view-admin');
+  await renderAdminList();
+}
+document.getElementById('admin-exit').addEventListener('click', ()=>{
+  showView(currentUser ? 'view-main' : 'view-auth');
+});
+async function renderAdminList(){
+  const list = document.getElementById('admin-list');
+  list.innerHTML = '<div class="empty-note"><span class="loading-dot"></span>Loading requests…</div>';
+  const q = await db.collection('withdrawals').get();
+  const all = q.docs.map(d=>({ id:d.id, ...d.data() }));
+  all.sort((a,b)=> (a.status === b.status ? b.createdAt - a.createdAt : (a.status === 'pending' ? -1 : 1)));
+  if(all.length === 0){ list.innerHTML = '<div class="empty-note">No withdrawal requests yet.</div>'; return; }
+  list.innerHTML = all.map(r=>{
+    const date = new Date(r.createdAt).toLocaleString();
+    const pill = r.status === 'paid' ? '<span class="status-pill status-paid">Paid</span>' : '<span class="status-pill status-pending">Pending</span>';
+    return `<div class="req-card"><div class="req-top"><span class="req-email">${r.email}</span>${pill}</div><div class="req-amount">$${r.amount.toFixed(2)} USDT</div><div class="req-addr">${r.address}</div><div style="font-size:11px; color:var(--ink-soft); margin-bottom:10px;">${date}</div>${r.status === 'pending' ? `<div class="req-actions"><button class="btn-mark-paid" data-id="${r.id}">Mark as paid</button></div>` : ''}</div>`;
+  }).join('');
+  list.querySelectorAll('.btn-mark-paid').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      btn.disabled = true; btn.textContent = 'Marking…';
+      await db.collection('withdrawals').doc(btn.dataset.id).update({ status:'paid', paidAt: Date.now() });
+      showToast('Marked as paid.');
+      await renderAdminList();
+    });
+  });
+}
+
+/* ---------------- Init ---------------- */
+buildWheel();
+if(window.location.hash === '#admin' && firebaseReady) tryEnterAdmin();
+</script>
+</body>
+</html>
