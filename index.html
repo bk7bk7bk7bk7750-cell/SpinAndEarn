@@ -19,9 +19,6 @@
   5. In Firestore → Rules tab, paste the rules given in the setup guide
      you were given alongside this file, then click Publish.
 =================================================================== -->
-<script>
-const CHECKIN_DAY7_REWARD = 0.0006;
-</script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
@@ -256,6 +253,8 @@ const CHECKIN_DAY7_REWARD = 0.0006;
     </div>
   </div>
 
+  <div id="welcome-banner" style="display:none; margin:12px 0; padding:14px 16px; border-radius:12px; background:#e9f8ef; border:1px solid #b9e7c8; font-weight:700;">Welcome back! 👋</div>
+
   <div class="toast" id="toast"></div>
 </div>
 
@@ -396,6 +395,8 @@ document.getElementById('auth-submit').addEventListener('click', async ()=>{
     } else {
       const cred = await auth.signInWithEmailAndPassword(email, pw);
       currentUser = cred.user;
+      const wb = document.getElementById('welcome-banner');
+      if (wb) { wb.style.display = 'block'; wb.textContent = 'Welcome back! 👋'; }
       const docSnap = await db.collection('users').doc(currentUser.uid).get();
       if(!docSnap.exists){ throw new Error('Account data not found.'); }
       currentData = docSnap.data();
@@ -752,25 +753,6 @@ if(window.location.hash === '#admin' && firebaseReady) tryEnterAdmin();
   <p><strong>Minimum withdrawal: $1.00</strong></p>
   <p>Withdrawals are supported to a <strong>BNB Smart Chain (BSC) Web3 wallet address</strong>.</p>
   <p>⚠️ <strong>Exchange account/address not allowed.</strong> Enter only your personal Web3 wallet address.</p>
-</div>
-
-<section class="card" id="daily-checkin-upgraded" style="margin-top:16px;">
-  <h3>🎁 7-Day Daily Check-in</h3>
-  <p>Check in once every day. The cycle resets after Day 7 at <strong>5:00 AM Pakistan time</strong>.</p>
-  <div class="checkin-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-top:12px;">
-    <div class="checkin-day"><strong>Day 1</strong><br><span>$0.0001</span><br><small>FREE</small></div>
-    <div class="checkin-day"><strong>Day 2</strong><br><span>$0.0001</span><br><small>WATCH AD</small></div>
-    <div class="checkin-day"><strong>Day 3</strong><br><span>$0.0002</span><br><small>WATCH AD</small></div>
-    <div class="checkin-day"><strong>Day 4</strong><br><span>$0.0003</span><br><small>WATCH AD</small></div>
-    <div class="checkin-day"><strong>Day 5</strong><br><span>$0.0004</span><br><small>WATCH AD</small></div>
-    <div class="checkin-day"><strong>Day 6</strong><br><span>$0.0005</span><br><small>WATCH AD</small></div>
-    <div class="checkin-day"><strong>Day 7</strong><br><span>🎁 Gift Box</span><br><small>FIXED REWARD</small></div>
-  </div>
-  <p style="margin-top:12px;">Day 7's gift-box reward is fixed per user and is not randomly generated.</p>
-</section>
-
-<div class="card" id="checkin-ad-note" style="margin-top:12px;">
-  <p><strong>Ad days:</strong> Day 2–Day 6 will require a verified rewarded-ad completion before the check-in reward is credited. The final Monetag ad callback will be integrated separately.</p>
 </div>
 </body>
 </html>
